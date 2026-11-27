@@ -78,18 +78,19 @@ final class AudioDeviceService: AudioDeviceProviding {
     // MARK: Devices
 
     func allDevices() throws -> [AudioDevice] {
-        let ids: [AudioObjectID] = try readArray(
+        let ids: [AudioObjectID] = try CoreAudioProperty.readArray(
             Self.systemObject,
-            address(kAudioHardwarePropertyDevices),
+            CoreAudioProperty.address(kAudioHardwarePropertyDevices),
             operation: "list audio devices"
         )
-        return ids.compactMap(makeDevice)
+        // Hide the private aggregate devices Orpheus creates for its Process Taps.
+        return ids.compactMap(makeDevice).filter { !$0.uid.hasPrefix(ProcessTapController.aggregateUIDPrefix) }
     }
 
     func defaultDeviceID(for role: DeviceRole) throws -> AudioDevice.ID? {
-        let id: AudioObjectID = try read(
+        let id: AudioObjectID = try CoreAudioProperty.read(
             Self.systemObject,
-            address(Self.selector(for: role)),
+            CoreAudioProperty.address(Self.selector(for: role)),
             initial: AudioObjectID(kAudioObjectUnknown),
             operation: "read the default device"
         )
@@ -97,9 +98,9 @@ final class AudioDeviceService: AudioDeviceProviding {
     }
 
     func setDefaultDevice(_ id: AudioDevice.ID, for role: DeviceRole) throws {
-        try write(
+        try CoreAudioProperty.write(
             Self.systemObject,
-            address(Self.selector(for: role)),
+            CoreAudioProperty.address(Self.selector(for: role)),
             value: id,
             operation: "change the default device"
         )
@@ -109,19 +110,19 @@ final class AudioDeviceService: AudioDeviceProviding {
 
     func volumeState(of id: AudioDevice.ID, scope: DeviceScope) -> VolumeState? {
         guard let volumeAddress = volumeAddress(of: id, scope: scope),
-              let level: Float32 = try? read(id, volumeAddress, initial: 0, operation: "read the volume")
+              let level: Float32 = try? CoreAudioProperty.read(id, volumeAddress, initial: 0, operation: "read the volume")
         else {
             return nil
         }
-        let muteAddress = address(kAudioDevicePropertyMute, scope: Self.coreAudioScope(scope))
-        let muteValue: UInt32? = has(id, muteAddress)
-            ? try? read(id, muteAddress, initial: 0, operation: "read the mute state")
+        let muteAddress = CoreAudioProperty.address(kAudioDevicePropertyMute, scope: Self.coreAudioScope(scope))
+        let muteValue: UInt32? = CoreAudioProperty.has(id, muteAddress)
+            ? try? CoreAudioProperty.read(id, muteAddress, initial: 0, operation: "read the mute state")
             : nil
         return VolumeState(
             level: level,
-            isSettable: isSettable(id, volumeAddress),
+            isSettable: CoreAudioProperty.isSettable(id, volumeAddress),
             isMuted: muteValue.map { $0 != 0 },
-            isMuteSettable: muteValue != nil && isSettable(id, muteAddress)
+            isMuteSettable: muteValue != nil && CoreAudioProperty.isSettable(id, muteAddress)
         )
     }
 
@@ -130,12 +131,12 @@ final class AudioDeviceService: AudioDeviceProviding {
             throw AudioError(operation: "change the volume", reason: .propertyUnsupported)
         }
         let clamped = Float32(min(max(level, 0), 1))
-        try write(id, volumeAddress, value: clamped, operation: "change the volume")
+        try CoreAudioProperty.write(id, volumeAddress, value: clamped, operation: "change the volume")
     }
 
     func setMuted(_ muted: Bool, of id: AudioDevice.ID, scope: DeviceScope) throws {
-        let muteAddress = address(kAudioDevicePropertyMute, scope: Self.coreAudioScope(scope))
-        try write(id, muteAddress, value: UInt32(muted ? 1 : 0), operation: "change the mute state")
+        let muteAddress = CoreAudioProperty.address(kAudioDevicePropertyMute, scope: Self.coreAudioScope(scope))
+        try CoreAudioProperty.write(id, muteAddress, value: UInt32(muted ? 1 : 0), operation: "change the mute state")
     }
 
     // MARK: Observation
@@ -150,7 +151,7 @@ final class AudioDeviceService: AudioDeviceProviding {
             kAudioHardwarePropertyDefaultSystemOutputDevice,
         ]
         systemListeners = selectors.compactMap { selector in
-            addListener(to: Self.systemObject, address: address(selector)) { [weak self] in
+            addListener(to: Self.systemObject, address: CoreAudioProperty.address(selector)) { [weak self] in
                 self?.updateDeviceListeners()
                 self?.onChange?()
             }
@@ -183,8 +184,8 @@ final class AudioDeviceService: AudioDeviceProviding {
                 kAudioDevicePropertyMute,
             ]
             for selector in selectors {
-                let listened = address(selector, scope: coreScope)
-                guard has(id, listened) else { continue }
+                let listened = CoreAudioProperty.address(selector, scope: coreScope)
+                guard CoreAudioProperty.has(id, listened) else { continue }
                 if let listener = addListener(to: id, address: listened, handler: { [weak self] in
                     self?.onChange?()
                 }) {
@@ -226,20 +227,20 @@ final class AudioDeviceService: AudioDeviceProviding {
     // MARK: Device description
 
     private func makeDevice(_ id: AudioObjectID) -> AudioDevice? {
-        guard let uid = readString(id, address(kAudioDevicePropertyDeviceUID)),
-              let name = readString(id, address(kAudioObjectPropertyName))
+        guard let uid = CoreAudioProperty.readString(id, CoreAudioProperty.address(kAudioDevicePropertyDeviceUID)),
+              let name = CoreAudioProperty.readString(id, CoreAudioProperty.address(kAudioObjectPropertyName))
         else {
             return nil
         }
-        let transport: UInt32 = (try? read(
+        let transport: UInt32 = (try? CoreAudioProperty.read(
             id,
-            address(kAudioDevicePropertyTransportType),
+            CoreAudioProperty.address(kAudioDevicePropertyTransportType),
             initial: 0,
             operation: "read the transport type"
         )) ?? 0
-        let sampleRate: Float64? = try? read(
+        let sampleRate: Float64? = try? CoreAudioProperty.read(
             id,
-            address(kAudioDevicePropertyNominalSampleRate),
+            CoreAudioProperty.address(kAudioDevicePropertyNominalSampleRate),
             initial: 0,
             operation: "read the sample rate"
         )
@@ -255,7 +256,7 @@ final class AudioDeviceService: AudioDeviceProviding {
     }
 
     private func channelCount(_ id: AudioObjectID, scope: AudioObjectPropertyScope) -> Int {
-        var streamAddress = address(kAudioDevicePropertyStreamConfiguration, scope: scope)
+        var streamAddress = CoreAudioProperty.address(kAudioDevicePropertyStreamConfiguration, scope: scope)
         var size: UInt32 = 0
         guard AudioObjectHasProperty(id, &streamAddress),
               AudioObjectGetPropertyDataSize(id, &streamAddress, 0, nil, &size) == noErr,
@@ -280,10 +281,10 @@ final class AudioDeviceService: AudioDeviceProviding {
     private func volumeAddress(of id: AudioObjectID, scope: DeviceScope) -> AudioObjectPropertyAddress? {
         let coreScope = Self.coreAudioScope(scope)
         let candidates = [
-            address(kAudioDevicePropertyVolumeScalar, scope: coreScope),
-            address(kAudioHardwareServiceDeviceProperty_VirtualMainVolume, scope: coreScope),
+            CoreAudioProperty.address(kAudioDevicePropertyVolumeScalar, scope: coreScope),
+            CoreAudioProperty.address(kAudioHardwareServiceDeviceProperty_VirtualMainVolume, scope: coreScope),
         ]
-        return candidates.first { has(id, $0) }
+        return candidates.first { CoreAudioProperty.has(id, $0) }
     }
 
     // MARK: Mapping
@@ -315,105 +316,6 @@ final class AudioDeviceService: AudioDeviceProviding {
         case kAudioDeviceTransportTypeAggregate, kAudioDeviceTransportTypeAutoAggregate: .aggregate
         case kAudioDeviceTransportTypeVirtual: .virtual
         default: .other
-        }
-    }
-
-    // MARK: Property access
-
-    private func address(
-        _ selector: AudioObjectPropertySelector,
-        scope: AudioObjectPropertyScope = kAudioObjectPropertyScopeGlobal
-    ) -> AudioObjectPropertyAddress {
-        AudioObjectPropertyAddress(mSelector: selector, mScope: scope, mElement: kAudioObjectPropertyElementMain)
-    }
-
-    private func has(_ id: AudioObjectID, _ address: AudioObjectPropertyAddress) -> Bool {
-        var address = address
-        return AudioObjectHasProperty(id, &address)
-    }
-
-    private func isSettable(_ id: AudioObjectID, _ address: AudioObjectPropertyAddress) -> Bool {
-        var address = address
-        var settable: DarwinBoolean = false
-        return AudioObjectIsPropertySettable(id, &address, &settable) == noErr && settable.boolValue
-    }
-
-    private func read<Value>(
-        _ id: AudioObjectID,
-        _ address: AudioObjectPropertyAddress,
-        initial: Value,
-        operation: String
-    ) throws -> Value {
-        var address = address
-        guard AudioObjectHasProperty(id, &address) else {
-            throw AudioError(operation: operation, reason: .propertyUnsupported)
-        }
-        var value = initial
-        var size = UInt32(MemoryLayout<Value>.size)
-        let status = withUnsafeMutablePointer(to: &value) { pointer in
-            AudioObjectGetPropertyData(id, &address, 0, nil, &size, pointer)
-        }
-        guard status == noErr else {
-            throw AudioError(operation: operation, reason: .status(status))
-        }
-        return value
-    }
-
-    private func readArray<Element>(
-        _ id: AudioObjectID,
-        _ address: AudioObjectPropertyAddress,
-        operation: String
-    ) throws -> [Element] where Element: BinaryInteger {
-        var address = address
-        var size: UInt32 = 0
-        var status = AudioObjectGetPropertyDataSize(id, &address, 0, nil, &size)
-        guard status == noErr else {
-            throw AudioError(operation: operation, reason: .status(status))
-        }
-        var values = [Element](repeating: 0, count: Int(size) / MemoryLayout<Element>.stride)
-        guard !values.isEmpty else { return [] }
-        status = values.withUnsafeMutableBytes { buffer in
-            // The buffer always has a base address because `values` is not empty.
-            AudioObjectGetPropertyData(id, &address, 0, nil, &size, buffer.baseAddress!)
-        }
-        guard status == noErr else {
-            throw AudioError(operation: operation, reason: .status(status))
-        }
-        // The device list can shrink between the two calls.
-        return Array(values.prefix(Int(size) / MemoryLayout<Element>.stride))
-    }
-
-    private func readString(_ id: AudioObjectID, _ address: AudioObjectPropertyAddress) -> String? {
-        var address = address
-        guard AudioObjectHasProperty(id, &address) else { return nil }
-        var value: Unmanaged<CFString>?
-        var size = UInt32(MemoryLayout<Unmanaged<CFString>?>.size)
-        let status = withUnsafeMutablePointer(to: &value) { pointer in
-            AudioObjectGetPropertyData(id, &address, 0, nil, &size, pointer)
-        }
-        guard status == noErr, let value else { return nil }
-        return value.takeRetainedValue() as String
-    }
-
-    private func write<Value>(
-        _ id: AudioObjectID,
-        _ address: AudioObjectPropertyAddress,
-        value: Value,
-        operation: String
-    ) throws {
-        guard has(id, address) else {
-            throw AudioError(operation: operation, reason: .propertyUnsupported)
-        }
-        guard isSettable(id, address) else {
-            throw AudioError(operation: operation, reason: .propertyNotSettable)
-        }
-        var address = address
-        var value = value
-        let status = withUnsafeMutablePointer(to: &value) { pointer in
-            AudioObjectSetPropertyData(id, &address, 0, nil, UInt32(MemoryLayout<Value>.size), pointer)
-        }
-        guard status == noErr else {
-            throw AudioError(operation: operation, reason: .status(status))
         }
     }
 }
