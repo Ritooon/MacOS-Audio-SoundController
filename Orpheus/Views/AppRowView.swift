@@ -48,7 +48,7 @@ struct AppRowView: View {
 
     private var iconButton: some View {
         Button(action: onToggleMute) {
-            AppIcon(pid: state.app.pid)
+            AppIcon(pid: state.app.pid, bundleID: state.app.id)
                 .frame(width: Self.iconSize, height: Self.iconSize)
                 .opacity(state.isMuted ? 0.4 : 1)
                 .overlay(alignment: .bottomTrailing) {
@@ -112,12 +112,14 @@ struct AppRowView: View {
 /// The app's own icon in a rounded tile.
 private struct AppIcon: View {
     let pid: pid_t
+    /// Used to find the icon when the process is gone.
+    let bundleID: String
 
     @Environment(\.theme) private var theme
 
     var body: some View {
         Group {
-            if let icon = NSRunningApplication(processIdentifier: pid)?.icon {
+            if let icon {
                 Image(nsImage: icon)
                     .resizable()
                     .interpolation(.high)
@@ -134,6 +136,19 @@ private struct AppIcon: View {
                 .fill(theme.surfaceMuted)
         )
         .accessibilityHidden(true)
+    }
+
+    /// The running app's icon, or the installed app's icon for its bundle identifier.
+    private var icon: NSImage? {
+        if let icon = NSRunningApplication(processIdentifier: pid)?.icon {
+            return icon
+        }
+        guard !bundleID.hasPrefix("pid:"),
+              let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID)
+        else {
+            return nil
+        }
+        return NSWorkspace.shared.icon(forFile: url.path)
     }
 }
 
