@@ -28,6 +28,18 @@ enum VolumeBarMath {
         return min(max(snapped + Float(steps) * step, 0), maximum)
     }
 
+    /// How close to 100 % a dragged boost bar snaps back to exactly 100 %.
+    static let unitySnapTolerance: Float = 0.05
+
+    /// Snaps a value to 100 % when it is close, so the user can return to "untouched" easily.
+    /// - Parameters:
+    ///   - value: The dragged value.
+    ///   - tolerance: The distance within which the value snaps.
+    /// - Returns: 1 when `value` is within `tolerance` of 1, otherwise `value`.
+    static func snappedToUnity(_ value: Float, tolerance: Float = unitySnapTolerance) -> Float {
+        abs(value - 1) <= tolerance ? 1 : value
+    }
+
     /// The value as a whole percentage, for display.
     /// - Parameter value: A value where 1 means 100 %.
     /// - Returns: The rounded percentage.
@@ -75,6 +87,13 @@ struct VolumeBar: View {
                 if shown > Self.boostThreshold {
                     boostSegment(from: fillWidth(for: Self.boostThreshold, in: width), to: fillWidth(for: shown, in: width))
                 }
+                if maximum > Self.boostThreshold {
+                    // Marks 100 %: everything to the right is boost.
+                    Capsule()
+                        .fill(theme.textSecondary)
+                        .frame(width: 2, height: Theme.Metrics.barThickness + 6)
+                        .offset(x: fillWidth(for: Self.boostThreshold, in: width) - 1)
+                }
             }
             .frame(height: Theme.Metrics.barThickness)
             .overlay {
@@ -89,7 +108,8 @@ struct VolumeBar: View {
             .gesture(
                 DragGesture(minimumDistance: 0)
                     .onChanged { gesture in
-                        let newValue = VolumeBarMath.value(at: gesture.location.x, width: width, maximum: maximum)
+                        let rawValue = VolumeBarMath.value(at: gesture.location.x, width: width, maximum: maximum)
+                        let newValue = maximum > Self.boostThreshold ? VolumeBarMath.snappedToUnity(rawValue) : rawValue
                         dragValue = newValue
                         onChange(newValue)
                     }

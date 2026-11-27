@@ -4,10 +4,17 @@ import SwiftUI
 /// The panel opened from the menu-bar item.
 struct MenuContentView: View {
     let audio: SystemAudioModel
+    let appAudio: AppAudioModel
     let launchAtLogin: LaunchAtLogin
 
     @Environment(\.theme) private var theme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var showsOtherApps = false
+
+    /// System Settings › Privacy & Security › Screen & System Audio Recording.
+    private static let audioCaptureSettingsURL = URL(
+        string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AudioCapture"
+    )
 
     /// System Settings › Sound.
     private static let soundSettingsURL = URL(string: "x-apple.systempreferences:com.apple.Sound-Settings.extension")
@@ -19,6 +26,7 @@ struct MenuContentView: View {
                 ErrorBanner(message: message) { audio.dismissError() }
             }
             systemCard
+            appsCard
             if let device = audio.output.selectedDevice {
                 DeviceInfoCard(device: device)
             }
@@ -80,6 +88,114 @@ struct MenuContentView: View {
                 }
             }
         }
+    }
+
+    // MARK: Apps card
+
+    private var appsCard: some View {
+        QuestCard {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack {
+                    SectionTitle(text: "Apps")
+                    Spacer()
+                    SegmentIndicator(
+                        active: appAudio.apps.filter(\.app.isPlaying).count,
+                        total: appAudio.apps.count
+                    )
+                }
+                if let message = appAudio.errorMessage {
+                    ErrorBanner(message: message) { appAudio.dismissError() }
+                }
+                if appAudio.needsCapturePermission {
+                    capturePermissionHint
+                }
+                if appAudio.activeApps.isEmpty {
+                    Text("No app is playing sound right now.")
+                        .font(.system(size: 12))
+                        .foregroundStyle(theme.textSecondary)
+                } else {
+                    ForEach(Array(appAudio.activeApps.enumerated()), id: \.element.id) { index, state in
+                        if index > 0 {
+                            QuestDivider()
+                        }
+                        appRow(state)
+                    }
+                }
+                if !appAudio.otherApps.isEmpty {
+                    otherAppsSection
+                }
+            }
+        }
+    }
+
+    private func appRow(_ state: AppAudioModel.AppState) -> some View {
+        AppRowView(
+            state: state,
+            deviceName: audio.output.selectedDevice?.name,
+            onVolumeChange: { appAudio.setVolume($0, for: state.id) },
+            onToggleMute: { appAudio.toggleMute(for: state.id) },
+            onReset: { appAudio.reset(state.id) }
+        )
+    }
+
+    private var otherAppsSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Button {
+                withAnimation(Theme.motion(reduceMotion: reduceMotion)) { showsOtherApps.toggle() }
+            } label: {
+                HStack(spacing: 8) {
+                    SectionTitle(text: "Other apps")
+                    ValueChip(
+                        text: "\(appAudio.otherApps.count)",
+                        foreground: theme.accentPrimary,
+                        background: theme.surfaceMuted
+                    )
+                    Spacer()
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(theme.textSecondary)
+                        .rotationEffect(.degrees(showsOtherApps ? 180 : 0))
+                }
+                .padding(10)
+                .background(
+                    RoundedRectangle(cornerRadius: Theme.Metrics.tileCornerRadius, style: .continuous)
+                        .fill(theme.surfaceMuted)
+                )
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Other apps, \(appAudio.otherApps.count)")
+            .accessibilityHint(showsOtherApps ? "Hides apps that are not playing" : "Shows apps that are not playing")
+
+            if showsOtherApps {
+                ForEach(appAudio.otherApps) { state in
+                    appRow(state)
+                }
+                .transition(.opacity)
+            }
+        }
+    }
+
+    private var capturePermissionHint: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("No sound reaches Orpheus. Allow it under Privacy & Security › Screen & System Audio Recording, or reset the app to 100 %.")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(theme.accentInfo)
+                .fixedSize(horizontal: false, vertical: true)
+            Button("Open Privacy settings") {
+                if let url = Self.audioCaptureSettingsURL {
+                    NSWorkspace.shared.open(url)
+                }
+            }
+            .buttonStyle(.plain)
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundStyle(theme.accentPrimary)
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: Theme.Metrics.tileCornerRadius + 4, style: .continuous)
+                .fill(theme.infoSurface)
+        )
     }
 
     // MARK: Footer
