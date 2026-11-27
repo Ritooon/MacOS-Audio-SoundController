@@ -30,3 +30,16 @@ struct VolumeBarMathTests {
         #expect(VolumeBarMath.percent(0) == 0)
     }
 }
+
+@Suite("VolumeBarMath snapping")
+struct VolumeBarSnapTests {
+    @Test func valuesNearUnitySnapToUnity() {
+        #expect(VolumeBarMath.snappedToUnity(1.03) == 1)
+        #expect(VolumeBarMath.snappedToUnity(0.96) == 1)
+    }
+
+    @Test func valuesFarFromUnityAreKept() {
+        #expect(VolumeBarMath.snappedToUnity(1.2) == 1.2)
+        #expect(VolumeBarMath.snappedToUnity(0.5) == 0.5)
+    }
+}

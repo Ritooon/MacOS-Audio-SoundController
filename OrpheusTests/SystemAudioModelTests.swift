@@ -220,4 +220,15 @@ struct SystemAudioModelTests {
         #expect(model.toast?.text == "AirPods disconnected")
         #expect(!model.output.devices.contains(headphones))
     }
+
+    @Test func outputDeviceChangeIsReported() {
+        let (model, _) = makeModel()
+        var reported: [String?] = []
+        model.onOutputDeviceChange = { reported.append($0?.uid) }
+        model.refresh()
+        model.refresh()
+        model.selectDevice(headphones.id, for: .output)
+
+        #expect(reported == [speakers.uid, headphones.uid])
+    }
 }
