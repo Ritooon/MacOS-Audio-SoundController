@@ -136,7 +136,7 @@ struct DeviceSectionView: View {
         }
         .padding(6)
         .background(
-            RoundedRectangle(cornerRadius: Theme.Metrics.tileCornerRadius + 4, style: .continuous)
+            RoundedRectangle(cornerRadius: theme.shape.control, style: .continuous)
                 .fill(theme.surfaceMuted)
         )
     }
@@ -188,7 +188,7 @@ private struct DeviceOptionRow: View {
             .padding(.horizontal, 10)
             .padding(.vertical, 7)
             .background(
-                RoundedRectangle(cornerRadius: Theme.Metrics.tileCornerRadius, style: .continuous)
+                RoundedRectangle(cornerRadius: theme.shape.tile, style: .continuous)
                     .fill(isHovered || isSelected ? theme.surface : .clear)
             )
             .contentShape(Rectangle())

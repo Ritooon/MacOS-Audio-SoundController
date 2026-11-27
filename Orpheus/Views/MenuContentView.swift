@@ -6,6 +6,8 @@ struct MenuContentView: View {
     let audio: SystemAudioModel
     let appAudio: AppAudioModel
     let launchAtLogin: LaunchAtLogin
+    /// The selected theme; the panel itself reads its colours from `\.theme`.
+    @Binding var themeID: ThemeID
 
     @Environment(\.theme) private var theme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -34,10 +36,23 @@ struct MenuContentView: View {
         }
         .padding(Theme.Metrics.panelPadding)
         .frame(width: Theme.Metrics.panelWidth)
-        .background(theme.background)
+        .background(panelBackground)
         .overlay(alignment: .top) { toast }
-        .environment(\.colorScheme, .dark)
+        .environment(\.colorScheme, theme.isLight ? .light : .dark)
         .onAppear { launchAtLogin.refresh() }
+    }
+
+    /// The theme background with a soft glow in the top-trailing corner.
+    private var panelBackground: some View {
+        theme.background
+            .overlay {
+                RadialGradient(
+                    colors: [theme.backgroundGlow, theme.background.opacity(0)],
+                    center: .topTrailing,
+                    startRadius: 0,
+                    endRadius: Theme.Metrics.panelWidth
+                )
+            }
     }
 
     // MARK: Header
@@ -50,8 +65,8 @@ struct MenuContentView: View {
             )
             VStack(alignment: .leading, spacing: 0) {
                 Text("ORPHEUS")
-                    .font(Theme.display(22, relativeTo: .title2))
-                    .tracking(1.5)
+                    .font(theme.display(22, relativeTo: .title2))
+                    .tracking(theme.tracking(1.5))
                     .foregroundStyle(theme.textPrimary)
                     .accessibilityAddTraits(.isHeader)
                 Text("Sound control")
@@ -158,7 +173,7 @@ struct MenuContentView: View {
                 }
                 .padding(10)
                 .background(
-                    RoundedRectangle(cornerRadius: Theme.Metrics.tileCornerRadius, style: .continuous)
+                    RoundedRectangle(cornerRadius: theme.shape.tile, style: .continuous)
                         .fill(theme.surfaceMuted)
                 )
                 .contentShape(Rectangle())
@@ -193,7 +208,7 @@ struct MenuContentView: View {
         }
         .padding(12)
         .background(
-            RoundedRectangle(cornerRadius: Theme.Metrics.tileCornerRadius + 4, style: .continuous)
+            RoundedRectangle(cornerRadius: theme.shape.control, style: .continuous)
                 .fill(theme.infoSurface)
         )
     }
@@ -202,6 +217,12 @@ struct MenuContentView: View {
 
     private var footer: some View {
         VStack(alignment: .leading, spacing: 8) {
+            ThemePicker(selection: Binding(
+                get: { themeID },
+                set: { newValue in
+                    withAnimation(Theme.motion(reduceMotion: reduceMotion)) { themeID = newValue }
+                }
+            ))
             if let message = launchAtLogin.errorMessage {
                 Text(message)
                     .font(.system(size: 12))
@@ -220,7 +241,7 @@ struct MenuContentView: View {
                     NSApplication.shared.terminate(nil)
                 } label: {
                     Text("Quit")
-                        .font(Theme.display(13, relativeTo: .callout))
+                        .font(theme.display(13, relativeTo: .callout))
                         .padding(.horizontal, 14)
                         .padding(.vertical, 6)
                 }
@@ -275,8 +296,8 @@ private struct DeviceInfoCard: View {
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 Text("NOW PLAYING ON")
-                    .font(Theme.display(11, relativeTo: .caption))
-                    .tracking(1)
+                    .font(theme.display(11, relativeTo: .caption))
+                    .tracking(theme.tracking(1))
                 Text(details)
                     .font(.system(size: 12, weight: .medium).monospacedDigit())
             }
@@ -285,7 +306,7 @@ private struct DeviceInfoCard: View {
         .foregroundStyle(theme.accentInfo)
         .padding(12)
         .background(
-            RoundedRectangle(cornerRadius: Theme.Metrics.tileCornerRadius + 4, style: .continuous)
+            RoundedRectangle(cornerRadius: theme.shape.control, style: .continuous)
                 .fill(theme.infoSurface)
         )
         .accessibilityElement(children: .combine)
@@ -320,7 +341,7 @@ private struct ErrorBanner: View {
         }
         .padding(12)
         .background(
-            RoundedRectangle(cornerRadius: Theme.Metrics.tileCornerRadius + 4, style: .continuous)
+            RoundedRectangle(cornerRadius: theme.shape.control, style: .continuous)
                 .fill(theme.surfaceMuted)
         )
     }

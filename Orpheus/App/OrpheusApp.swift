@@ -6,6 +6,7 @@ struct OrpheusApp: App {
     @State private var audio: SystemAudioModel
     @State private var appAudio: AppAudioModel
     @State private var launchAtLogin = LaunchAtLogin()
+    @AppStorage(SettingsKey.themeID.rawValue) private var savedThemeID = ThemeID.neon.rawValue
 
     init() {
         let audio = SystemAudioModel(provider: AudioDeviceService())
@@ -29,12 +30,21 @@ struct OrpheusApp: App {
 
     var body: some Scene {
         MenuBarExtra {
-            MenuContentView(audio: audio, appAudio: appAudio, launchAtLogin: launchAtLogin)
+            MenuContentView(audio: audio, appAudio: appAudio, launchAtLogin: launchAtLogin, themeID: themeID)
+                .environment(\.theme, Theme.theme(for: themeID.wrappedValue))
         } label: {
             Image(nsImage: MenuBarIcon.image(for: menuBarState))
                 .accessibilityLabel("Orpheus")
         }
         .menuBarExtraStyle(.window)
+    }
+
+    /// The saved theme, falling back to Néon for unknown values.
+    private var themeID: Binding<ThemeID> {
+        Binding(
+            get: { ThemeID.resolve(savedThemeID) },
+            set: { savedThemeID = $0.rawValue }
+        )
     }
 
     /// Pink when the output is muted, yellow when an app is boosted, purple otherwise.

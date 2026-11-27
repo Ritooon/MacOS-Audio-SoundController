@@ -48,7 +48,7 @@ enum VolumeBarMath {
     }
 }
 
-/// A thick capsule volume bar that behaves like a slider.
+/// A thick volume bar that behaves like a slider, shaped by the theme (capsule or blocks).
 ///
 /// The part above 100 % (boost) is drawn brighter, with a glow unless Reduce Transparency is on.
 /// It works with the mouse, the arrow keys and VoiceOver.
@@ -79,26 +79,30 @@ struct VolumeBar: View {
             let width = proxy.size.width
             let shown = dragValue ?? value
             ZStack(alignment: .leading) {
-                Capsule()
+                barShape
                     .fill(theme.surfaceMuted)
-                Capsule()
-                    .fill(isDimmed || !isEnabled ? theme.textDisabled : theme.accentBoost)
-                    .frame(width: fillWidth(for: min(shown, Self.boostThreshold), in: width))
-                if shown > Self.boostThreshold {
-                    boostSegment(from: fillWidth(for: Self.boostThreshold, in: width), to: fillWidth(for: shown, in: width))
+                ZStack(alignment: .leading) {
+                    barShape
+                        .fill(isDimmed || !isEnabled ? theme.textDisabled : theme.accentBoost)
+                        .frame(width: fillWidth(for: min(shown, Self.boostThreshold), in: width))
+                    if shown > Self.boostThreshold {
+                        boostSegment(from: fillWidth(for: Self.boostThreshold, in: width), to: fillWidth(for: shown, in: width))
+                    }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .modifier(SegmentedBarMask(isActive: theme.shape.isBarSegmented))
                 if maximum > Self.boostThreshold {
                     // Marks 100 %: everything to the right is boost.
-                    Capsule()
+                    RoundedRectangle(cornerRadius: theme.shape.bar, style: .continuous)
                         .fill(theme.textSecondary)
-                        .frame(width: 2, height: Theme.Metrics.barThickness + 6)
+                        .frame(width: 2, height: theme.shape.barThickness + 6)
                         .offset(x: fillWidth(for: Self.boostThreshold, in: width) - 1)
                 }
             }
-            .frame(height: Theme.Metrics.barThickness)
+            .frame(height: theme.shape.barThickness)
             .overlay {
                 if isFocused || contrast == .increased {
-                    Capsule()
+                    barShape
                         .strokeBorder(isFocused ? theme.accentPrimary : theme.textSecondary, lineWidth: isFocused ? 2 : 1)
                         .padding(-2)
                 }
@@ -143,8 +147,12 @@ struct VolumeBar: View {
         return width * CGFloat(min(max(value / maximum, 0), 1))
     }
 
+    private var barShape: RoundedRectangle {
+        RoundedRectangle(cornerRadius: theme.shape.bar, style: .continuous)
+    }
+
     private func boostSegment(from start: CGFloat, to end: CGFloat) -> some View {
-        Capsule()
+        barShape
             .fill(theme.accentBoost)
             .brightness(0.15)
             .frame(width: max(end - start, 0))
@@ -156,5 +164,28 @@ struct VolumeBar: View {
         guard isEnabled else { return .ignored }
         onChange(VolumeBarMath.stepped(value, by: steps, maximum: maximum))
         return .handled
+    }
+}
+
+/// Cuts a bar's fill into separate blocks, like a game health gauge, when the theme asks for it.
+private struct SegmentedBarMask: ViewModifier {
+    let isActive: Bool
+
+    func body(content: Content) -> some View {
+        if isActive {
+            content.mask {
+                Canvas { context, size in
+                    let pitch = Theme.Metrics.barSegmentWidth + Theme.Metrics.barSegmentGap
+                    var x: CGFloat = 0
+                    while x < size.width {
+                        let width = min(Theme.Metrics.barSegmentWidth, size.width - x)
+                        context.fill(Path(CGRect(x: x, y: 0, width: width, height: size.height)), with: .color(.black))
+                        x += pitch
+                    }
+                }
+            }
+        } else {
+            content
+        }
     }
 }
