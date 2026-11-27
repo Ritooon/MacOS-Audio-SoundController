@@ -273,12 +273,14 @@ Define colours once, as named tokens in the asset catalog (`Resources/Assets.xca
 | `infoSurface` | `#0F2B38` | background of info cards (e.g. current default device) |
 
 - Use a coloured text on a dark tinted background of the same hue for chips and pills (yellow on `boostChipBackground`, green on dark green, and so on).
-- Plan for **themes** like Today Quest's (Néon, Rétro 8-bit, Cosmos…): the table above is the default "Néon" theme. Views read colours only from `Theme`, so another theme is just another set of tokens.
+- **Themes**: the table above is the default "Néon" theme. Six more ship with the app: Rétro 8-bit, Cosmos, Sylve, Magma, Givre (the optional light theme) and Abysses. Each theme has one asset-catalog folder (`Theme/` for Néon, `ThemeRetro/`, `ThemeCosmos/`…) with the same colour sets, plus three extra tokens: `boostChipText` (text of boost chips), `onAccent` (symbols and text on filled accents) and `backgroundGlow` (soft radial glow over the panel background).
+- Besides colours, a `Theme` carries **shape tokens** (`ShapeTokens`: corner radii of cards, controls, tiles, icon buttons, bars, chips and checkboxes, bar thickness, segmented bars), its **display font** (`Typography`: PostScript name, size scale, tracking) and a header **decoration**. Views read radii and the display font from `theme`, never from constants.
+- The user picks the theme with the swatch row in the panel footer; it is saved under `SettingsKey.themeID` and falls back to Néon for unknown values. A new theme needs a `ThemeID` case, a `Theme` constant listed in `Theme.all`, its colour folder and, if needed, its font.
 - The panel is always dark by default. A light theme is an optional extra theme, not an automatic Light Mode switch.
 
 ### Typography
 
-- **Display font** (titles, section headers, big numbers): a bold geometric typeface with a game feel, bundled in `Resources/Fonts` and registered in `Info.plist` (Today Quest uses this style; pick an open-licence font such as Space Grotesk and keep its licence file in the repo).
+- **Display font** (titles, section headers, big numbers): a bold geometric typeface with a game feel, bundled in `Resources/Fonts` and registered in `Info.plist` (Today Quest uses this style; pick an open-licence font such as Space Grotesk and keep its licence file in the repo). Each theme has its own display font, all SIL OFL with their licence files next to them.
 - Section titles are **uppercase** in the display font ("SYSTEM", "APPS", "OUTPUT").
 - **Body text**: the system font (SF Pro) for names, captions and secondary text.
 - Numbers (volume %, boost %) use monospaced digits (`.monospacedDigit()`) so they do not jitter while sliding.

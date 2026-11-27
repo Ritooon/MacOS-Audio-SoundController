@@ -55,7 +55,7 @@ struct AppRowView: View {
                     if state.isMuted {
                         Image(systemName: "speaker.slash.fill")
                             .font(.system(size: 9, weight: .bold))
-                            .foregroundStyle(theme.background)
+                            .foregroundStyle(theme.surface)
                             .padding(3)
                             .background(Circle().fill(theme.accentAction))
                             .offset(x: 4, y: 4)
@@ -92,7 +92,7 @@ struct AppRowView: View {
         let chip: ValueChip = if state.isMuted {
             ValueChip(text: "MUTED", foreground: theme.accentAction, background: theme.surfaceMuted)
         } else if state.isBoosted {
-            ValueChip(text: "+\(percent) %", foreground: theme.accentBoost, background: theme.boostChipBackground)
+            ValueChip(text: "+\(percent) %", foreground: theme.boostChipText, background: theme.boostChipBackground)
         } else {
             ValueChip(
                 text: "\(percent) %",
@@ -130,7 +130,7 @@ private struct AppIcon: View {
             }
         }
         .background(
-            RoundedRectangle(cornerRadius: Theme.Metrics.iconButtonCornerRadius, style: .continuous)
+            RoundedRectangle(cornerRadius: theme.shape.iconButton, style: .continuous)
                 .fill(theme.surfaceMuted)
         )
         .accessibilityHidden(true)
@@ -149,7 +149,7 @@ struct SegmentIndicator: View {
     var body: some View {
         HStack(spacing: 3) {
             ForEach(0 ..< min(total, Self.maxSegments), id: \.self) { index in
-                Capsule()
+                RoundedRectangle(cornerRadius: theme.shape.bar, style: .continuous)
                     .fill(index < active ? theme.accentSuccess : theme.surfaceMuted)
                     .frame(width: 10, height: 5)
             }

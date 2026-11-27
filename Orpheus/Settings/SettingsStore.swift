@@ -6,6 +6,8 @@ enum SettingsKey: String, CaseIterable {
     case appVolumes = "app.volumes"
     /// Muted apps, `[bundleID: Bool]`.
     case appMutes = "app.mutes"
+    /// The selected panel theme, a ``ThemeID`` raw value. Read and written with `@AppStorage`.
+    case themeID = "theme.id"
 }
 
 /// Persists user preferences. Per-app settings are keyed by bundle identifier.

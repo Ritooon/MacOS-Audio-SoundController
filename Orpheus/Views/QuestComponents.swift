@@ -17,12 +17,12 @@ struct QuestCard<Content: View>: View {
             .padding(Theme.Metrics.cardPadding)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
-                RoundedRectangle(cornerRadius: Theme.Metrics.cardCornerRadius, style: .continuous)
+                RoundedRectangle(cornerRadius: theme.shape.card, style: .continuous)
                     .fill(theme[keyPath: fill])
             )
             .overlay {
                 if contrast == .increased {
-                    RoundedRectangle(cornerRadius: Theme.Metrics.cardCornerRadius, style: .continuous)
+                    RoundedRectangle(cornerRadius: theme.shape.card, style: .continuous)
                         .strokeBorder(theme.textSecondary, lineWidth: Theme.Metrics.contrastBorderWidth)
                 }
             }
@@ -48,8 +48,8 @@ struct SectionTitle: View {
 
     var body: some View {
         Text(text.uppercased())
-            .font(Theme.display(13, relativeTo: .subheadline))
-            .tracking(1.2)
+            .font(theme.display(13, relativeTo: .subheadline))
+            .tracking(theme.tracking(1.2))
             .foregroundStyle(theme.textSecondary)
             .accessibilityAddTraits(.isHeader)
     }
@@ -60,14 +60,15 @@ struct SectionTitle: View {
 /// A rounded shape with a darker bottom edge, so it looks pressable like a game button.
 struct ChunkyBackground: View {
     let color: Color
-    var cornerRadius: CGFloat = Theme.Metrics.tileCornerRadius
+    /// The corner radius; `nil` uses the theme's tile radius.
+    var cornerRadius: CGFloat?
     var isPressed = false
 
     @Environment(\.theme) private var theme
     @Environment(\.colorSchemeContrast) private var contrast
 
     var body: some View {
-        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        let shape = RoundedRectangle(cornerRadius: cornerRadius ?? theme.shape.tile, style: .continuous)
         ZStack {
             shape
                 .fill(Theme.edge(of: color))
@@ -89,7 +90,8 @@ struct ChunkyBackground: View {
 struct ChunkyButtonStyle: ButtonStyle {
     let color: Color
     var foreground: Color?
-    var cornerRadius: CGFloat = Theme.Metrics.tileCornerRadius
+    /// The corner radius; `nil` uses the theme's tile radius.
+    var cornerRadius: CGFloat?
 
     @Environment(\.theme) private var theme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -116,7 +118,7 @@ struct SymbolTile: View {
     var body: some View {
         Image(systemName: symbolName)
             .font(.system(size: size * 0.45, weight: .bold))
-            .foregroundStyle(theme.background)
+            .foregroundStyle(theme.onAccent)
             .frame(width: size, height: size)
             .padding(.bottom, Theme.Metrics.chunkyDepth)
             .background(ChunkyBackground(color: color))
@@ -141,8 +143,8 @@ struct IconButton: View {
         }
         .buttonStyle(ChunkyButtonStyle(
             color: tint ?? theme.surfaceMuted,
-            foreground: tint == nil ? theme.textPrimary : theme.background,
-            cornerRadius: Theme.Metrics.iconButtonCornerRadius
+            foreground: tint == nil ? theme.textPrimary : theme.onAccent,
+            cornerRadius: theme.shape.iconButton
         ))
         .accessibilityLabel(label)
         .help(label)
@@ -157,14 +159,16 @@ struct ValueChip: View {
     let foreground: Color
     let background: Color
 
+    @Environment(\.theme) private var theme
+
     var body: some View {
         Text(text)
-            .font(Theme.display(12, relativeTo: .caption).monospacedDigit())
+            .font(theme.display(12, relativeTo: .caption).monospacedDigit())
             .foregroundStyle(foreground)
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
             .frame(minWidth: 48)
-            .background(Capsule().fill(background))
+            .background(RoundedRectangle(cornerRadius: theme.shape.chip, style: .continuous).fill(background))
     }
 }
 
@@ -182,17 +186,17 @@ struct QuestCheckboxStyle: ToggleStyle {
             configuration.isOn.toggle()
         } label: {
             HStack(spacing: 10) {
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                RoundedRectangle(cornerRadius: theme.shape.checkbox, style: .continuous)
                     .fill(configuration.isOn ? theme.accentSuccess : .clear)
                     .overlay {
-                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        RoundedRectangle(cornerRadius: theme.shape.checkbox, style: .continuous)
                             .strokeBorder(configuration.isOn ? theme.accentSuccess : theme.accentPrimary, lineWidth: 2)
                     }
                     .overlay {
                         if configuration.isOn {
                             Image(systemName: "checkmark")
                                 .font(.system(size: 11, weight: .heavy))
-                                .foregroundStyle(theme.background)
+                                .foregroundStyle(theme.onAccent)
                         }
                     }
                     .frame(width: Self.boxSize, height: Self.boxSize)
@@ -211,12 +215,9 @@ struct QuestCheckboxStyle: ToggleStyle {
 
 // MARK: - Toast
 
-/// A short, bold, yellow pill with a darker bottom edge.
+/// A short, bold pill in the boost colour with a darker bottom edge.
 struct ToastView: View {
     let message: ToastMessage
-
-    /// Large enough to turn the rounded rectangle into a pill.
-    private static let pillRadius: CGFloat = 100
 
     @Environment(\.theme) private var theme
 
@@ -225,14 +226,14 @@ struct ToastView: View {
             Image(systemName: message.symbolName)
                 .font(.system(size: 12, weight: .bold))
             Text(message.text)
-                .font(Theme.display(13, relativeTo: .callout))
+                .font(theme.display(13, relativeTo: .callout))
                 .lineLimit(1)
         }
-        .foregroundStyle(theme.background)
+        .foregroundStyle(theme.onAccent)
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
         .padding(.bottom, Theme.Metrics.chunkyDepth)
-        .background(ChunkyBackground(color: theme.accentBoost, cornerRadius: Self.pillRadius))
+        .background(ChunkyBackground(color: theme.accentBoost, cornerRadius: theme.shape.chip))
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isStaticText)
     }
@@ -240,26 +241,111 @@ struct ToastView: View {
 
 // MARK: - Decoration
 
-/// A few soft coloured squares, as in Today Quest's header. Purely decorative.
+/// A small ornament in the header, drawn from the theme. Purely decorative and static.
 struct HeaderDecoration: View {
     @Environment(\.theme) private var theme
 
-    private static let opacity: Double = 0.35
+    private static let opacity: Double = 0.4
+    private static let size = CGSize(width: 44, height: 30)
 
     var body: some View {
-        HStack(alignment: .top, spacing: 4) {
-            square(theme.accentPrimary, size: 10, angle: 12)
-            square(theme.accentBoost, size: 7, angle: -18)
-                .offset(y: 8)
-            square(theme.accentSuccess, size: 12, angle: 24)
-        }
-        .accessibilityHidden(true)
+        ornament
+            .frame(width: Self.size.width, height: Self.size.height)
+            .accessibilityHidden(true)
     }
 
-    private func square(_ color: Color, size: CGFloat, angle: Double) -> some View {
-        RoundedRectangle(cornerRadius: size * 0.3, style: .continuous)
+    @ViewBuilder
+    private var ornament: some View {
+        switch theme.decoration {
+        case .squares:
+            HStack(alignment: .top, spacing: 4) {
+                square(theme.accentPrimary, size: 10, angle: 12)
+                square(theme.accentBoost, size: 7, angle: -18).offset(y: 8)
+                square(theme.accentSuccess, size: 12, angle: 24)
+            }
+        case .pixels:
+            ZStack {
+                pixel(theme.accentPrimary, x: -12, y: -8)
+                pixel(theme.accentBoost, x: 0, y: 0)
+                pixel(theme.accentAction, x: -12, y: 8)
+                pixel(theme.accentSuccess, x: 12, y: -8)
+            }
+        case .planet:
+            ZStack {
+                Circle()
+                    .fill(RadialGradient(
+                        colors: [theme.accentBoost, theme.accentAction],
+                        center: UnitPoint(x: 0.35, y: 0.35), startRadius: 0, endRadius: 14
+                    ))
+                    .frame(width: 22, height: 22)
+                Ellipse()
+                    .stroke(theme.accentBoost.opacity(0.6), lineWidth: 1.5)
+                    .frame(width: 40, height: 10)
+                    .rotationEffect(.degrees(-18))
+                Circle().fill(theme.textPrimary).frame(width: 2, height: 2).offset(x: -18, y: -11)
+                Circle().fill(theme.textPrimary).frame(width: 1.5, height: 1.5).offset(x: 17, y: 11)
+            }
+        case .leaves:
+            HStack(alignment: .top, spacing: 3) {
+                leaf(theme.accentPrimary, size: 13, angle: 0)
+                leaf(theme.accentBoost, size: 9, angle: 40).offset(y: 10)
+                leaf(theme.accentSuccess, size: 11, angle: -20)
+            }
+        case .embers:
+            ZStack {
+                ember(x: -12, y: 8, size: 5)
+                ember(x: 0, y: -4, size: 4)
+                ember(x: 10, y: 6, size: 6)
+                ember(x: 16, y: -10, size: 3)
+            }
+        case .crystals:
+            HStack(alignment: .top, spacing: 5) {
+                square(theme.accentPrimary, size: 11, angle: 45, radius: 2)
+                square(theme.accentBoost, size: 7, angle: 45, radius: 2).offset(y: 10)
+                square(theme.accentInfo, size: 9, angle: 45, radius: 2)
+            }
+        case .bubbles:
+            ZStack {
+                bubble(size: 14, x: -6, y: -4)
+                bubble(size: 8, x: 10, y: 8)
+                bubble(size: 6, x: 14, y: -10)
+            }
+        }
+    }
+
+    private func square(_ color: Color, size: CGFloat, angle: Double, radius: CGFloat? = nil) -> some View {
+        RoundedRectangle(cornerRadius: radius ?? size * 0.3, style: .continuous)
             .fill(color.opacity(Self.opacity))
             .frame(width: size, height: size)
             .rotationEffect(.degrees(angle))
+    }
+
+    private func pixel(_ color: Color, x: CGFloat, y: CGFloat) -> some View {
+        Rectangle()
+            .fill(color.opacity(Self.opacity + 0.2))
+            .frame(width: 8, height: 8)
+            .offset(x: x, y: y)
+    }
+
+    private func leaf(_ color: Color, size: CGFloat, angle: Double) -> some View {
+        UnevenRoundedRectangle(topLeadingRadius: 0, bottomLeadingRadius: size, bottomTrailingRadius: 0, topTrailingRadius: size)
+            .fill(color.opacity(Self.opacity + 0.1))
+            .frame(width: size, height: size)
+            .rotationEffect(.degrees(angle))
+    }
+
+    private func ember(x: CGFloat, y: CGFloat, size: CGFloat) -> some View {
+        Circle()
+            .fill(theme.accentBoost)
+            .frame(width: size, height: size)
+            .shadow(color: theme.accentPrimary, radius: 3)
+            .offset(x: x, y: y)
+    }
+
+    private func bubble(size: CGFloat, x: CGFloat, y: CGFloat) -> some View {
+        Circle()
+            .stroke(theme.accentSuccess.opacity(Self.opacity + 0.1), lineWidth: 1.5)
+            .frame(width: size, height: size)
+            .offset(x: x, y: y)
     }
 }
