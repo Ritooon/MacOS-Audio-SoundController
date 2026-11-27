@@ -1,71 +1,15 @@
 import AppKit
 import SwiftUI
 
-/// Orpheus's lyre, drawn in a unit square so it scales from the menu bar to the app icon.
-/// The app icon in the asset catalog uses the same geometry.
-struct LyreGlyph: View {
-    var frameColor: Color
-    var stringColor: Color
-    /// Stroke width of the arms and crossbar, as a fraction of the size.
-    var armWidth: CGFloat = 0.09
-    /// Stroke width of the strings, as a fraction of the size.
-    var stringWidth: CGFloat = 0.035
-    var stringPositions: [CGFloat] = [0.41, 0.47, 0.53, 0.59]
+/// Orpheus's lyre, drawn in a unit square (y pointing down) so it scales from the menu bar
+/// to the app icon. The app icon in the asset catalog uses the same geometry.
+enum LyreGeometry {
+    /// The part of the unit square the lyre occupies, so it can be drawn at full size.
+    static let bounds = CGRect(x: 0.04, y: 0.03, width: 0.92, height: 0.88)
 
-    var body: some View {
-        GeometryReader { proxy in
-            let size = min(proxy.size.width, proxy.size.height)
-            ZStack {
-                Self.strings(stringPositions)
-                    .stroke(stringColor, style: StrokeStyle(lineWidth: size * stringWidth, lineCap: .round))
-                Self.frame()
-                    .stroke(frameColor, style: StrokeStyle(lineWidth: size * armWidth, lineCap: .round, lineJoin: .round))
-                Self.base()
-                    .fill(frameColor)
-            }
-            .frame(width: size, height: size)
-        }
-        .aspectRatio(1, contentMode: .fit)
-        .accessibilityHidden(true)
-    }
-
-    private static func frame() -> UnitShape {
-        UnitShape(kind: .frame)
-    }
-
-    private static func strings(_ positions: [CGFloat]) -> UnitShape {
-        UnitShape(kind: .strings(positions))
-    }
-
-    private static func base() -> UnitShape {
-        UnitShape(kind: .base)
-    }
-}
-
-/// A part of the lyre, described in a unit square and scaled to its rect.
-private struct UnitShape: Shape {
-    enum Kind {
-        case frame
-        case strings([CGFloat])
-        case base
-    }
-
-    let kind: Kind
-
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        switch kind {
-        case .frame: Self.addFrame(to: &path)
-        case let .strings(positions): Self.addStrings(positions, to: &path)
-        case .base: Self.addBase(to: &path)
-        }
-        let size = min(rect.width, rect.height)
-        return path.applying(
-            CGAffineTransform(translationX: rect.minX, y: rect.minY).scaledBy(x: size, y: size)
-        )
-    }
-
-    private static func addFrame(to path: inout Path) {
+    /// The two arms, with their curled horns, and the crossbar.
+    static let frame: CGPath = {
+        let path = CGMutablePath()
         for mirrored in [false, true] {
             let x: (CGFloat) -> CGFloat = mirrored ? { 1 - $0 } : { $0 }
             path.move(to: CGPoint(x: x(0.38), y: 0.80))
@@ -78,24 +22,36 @@ private struct UnitShape: Shape {
         }
         path.move(to: CGPoint(x: 0.22, y: 0.27))
         path.addLine(to: CGPoint(x: 0.78, y: 0.27))
-    }
+        return path
+    }()
 
-    private static func addStrings(_ positions: [CGFloat], to path: inout Path) {
+    /// The base the arms rest on.
+    static let base = CGPath(
+        roundedRect: CGRect(x: 0.27, y: 0.74, width: 0.46, height: 0.13),
+        cornerWidth: 0.045,
+        cornerHeight: 0.045,
+        transform: nil
+    )
+
+    /// The strings.
+    /// - Parameter positions: Horizontal positions in the unit square.
+    /// - Returns: One vertical line per string.
+    static func strings(at positions: [CGFloat]) -> CGPath {
+        let path = CGMutablePath()
         for x in positions {
             path.move(to: CGPoint(x: x, y: 0.27))
-            path.addLine(to: CGPoint(x: x, y: 0.76))
+            path.addLine(to: CGPoint(x: x, y: 0.75))
         }
-    }
-
-    private static func addBase(to path: inout Path) {
-        path.addRoundedRect(
-            in: CGRect(x: 0.27, y: 0.74, width: 0.46, height: 0.13),
-            cornerSize: CGSize(width: 0.045, height: 0.045)
-        )
+        return path
     }
 }
 
-/// The coloured menu-bar icon: the lyre on a small game tile whose colour shows the state.
+/// The menu-bar icon: a monochrome lyre at full size, with no background.
+///
+/// Like a template image, the lyre is white on a dark menu bar and black on a light one.
+/// It is not a template image so the strings can show the state in the theme colours:
+/// the same colour as the lyre normally, yellow when an app is boosted, pink when the
+/// output is muted.
 enum MenuBarIcon {
     /// What the icon shows.
     enum State: Hashable {
@@ -104,46 +60,71 @@ enum MenuBarIcon {
         case boosted
     }
 
-    private static let pointSize: CGFloat = 18
-    private static let tileInset: CGFloat = 1
-    private static let glyphInset: CGFloat = 3
-    private static let renderScale: CGFloat = 2
+    private static let pointSize = NSSize(width: 18, height: 18)
+    /// Stroke widths as a fraction of the icon size.
+    private static let armWidth: CGFloat = 0.12
+    private static let stringWidth: CGFloat = 0.075
+    private static let stringPositions: [CGFloat] = [0.42, 0.5, 0.58]
+    private static let lightBarOpacity: CGFloat = 0.85
     private static var cache: [State: NSImage] = [:]
 
-    /// The icon image for a state, rendered once and cached.
+    /// The icon image for a state, created once and cached.
+    ///
+    /// The image draws lazily, so it follows the menu bar's appearance each time it is drawn.
     /// - Parameters:
     ///   - state: The state to show.
-    ///   - theme: The theme providing the colours.
-    /// - Returns: A non-template image, so the theme colours show in the menu bar.
+    ///   - theme: The theme providing the state colours.
+    /// - Returns: The image.
     @MainActor
     static func image(for state: State, theme: Theme = .neon) -> NSImage {
         if let cached = cache[state] { return cached }
-        let tileColor: Color = switch state {
-        case .normal: theme.accentPrimary
-        case .muted: theme.accentAction
-        case .boosted: theme.accentBoost
+        let accent: NSColor? = switch state {
+        case .normal: nil
+        case .boosted: NSColor(theme.accentBoost)
+        case .muted: NSColor(theme.accentAction)
         }
-        let content = ZStack {
-            RoundedRectangle(cornerRadius: 5, style: .continuous)
-                .fill(tileColor)
-                .padding(tileInset)
-            LyreGlyph(
-                frameColor: theme.background,
-                stringColor: theme.background,
-                armWidth: 0.12,
-                stringWidth: 0.07,
-                stringPositions: [0.43, 0.5, 0.57]
-            )
-            .padding(glyphInset)
+        let image = NSImage(size: pointSize, flipped: true) { rect in
+            guard let context = NSGraphicsContext.current?.cgContext else { return false }
+            let isDark = NSAppearance.currentDrawing().bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+            let ink = isDark ? NSColor.white : NSColor.black.withAlphaComponent(lightBarOpacity)
+            draw(in: context, rect: rect, frameColor: ink.cgColor, stringColor: (accent ?? ink).cgColor)
+            return true
         }
-        .frame(width: pointSize, height: pointSize)
-
-        let renderer = ImageRenderer(content: content)
-        renderer.scale = renderScale
-        let image = renderer.nsImage ?? NSImage(systemSymbolName: "music.note", accessibilityDescription: nil) ?? NSImage()
         image.isTemplate = false
         image.accessibilityDescription = "Orpheus"
         cache[state] = image
         return image
+    }
+
+    /// Draws the lyre stretched to fill `rect`.
+    private static func draw(in context: CGContext, rect: CGRect, frameColor: CGColor, stringColor: CGColor) {
+        let size = min(rect.width, rect.height)
+        let bounds = LyreGeometry.bounds
+        var transform = CGAffineTransform(translationX: rect.minX, y: rect.minY)
+            .scaledBy(x: rect.width / bounds.width, y: rect.height / bounds.height)
+            .translatedBy(x: -bounds.minX, y: -bounds.minY)
+
+        context.saveGState()
+        defer { context.restoreGState() }
+        context.setLineCap(.round)
+        context.setLineJoin(.round)
+
+        if let strings = LyreGeometry.strings(at: stringPositions).copy(using: &transform) {
+            context.addPath(strings)
+            context.setStrokeColor(stringColor)
+            context.setLineWidth(size * stringWidth)
+            context.strokePath()
+        }
+        if let frame = LyreGeometry.frame.copy(using: &transform) {
+            context.addPath(frame)
+            context.setStrokeColor(frameColor)
+            context.setLineWidth(size * armWidth)
+            context.strokePath()
+        }
+        if let base = LyreGeometry.base.copy(using: &transform) {
+            context.addPath(base)
+            context.setFillColor(frameColor)
+            context.fillPath()
+        }
     }
 }
