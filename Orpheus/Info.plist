@@ -8,5 +8,7 @@
 	<true/>
 	<key>NSAudioCaptureUsageDescription</key>
 	<string>Orpheus needs access to app audio to route each app to its own output device and adjust its volume.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Orpheus reads app audio streams to adjust their volume. It never records your microphone.</string>
 </dict>
 </plist>
