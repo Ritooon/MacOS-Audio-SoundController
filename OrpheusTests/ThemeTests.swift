@@ -3,6 +3,7 @@ import SwiftUI
 import Testing
 @testable import Orpheus
 
+@MainActor
 @Suite("Theme")
 struct ThemeTests {
     @Test func everyThemeIDHasExactlyOneTheme() {
