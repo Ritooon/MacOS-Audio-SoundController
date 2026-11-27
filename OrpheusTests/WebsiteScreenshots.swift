@@ -1,4 +1,5 @@
 import AppKit
+import CoreAudio
 import SwiftUI
 import Testing
 @testable import Orpheus
