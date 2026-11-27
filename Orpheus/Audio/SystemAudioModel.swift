@@ -39,6 +39,9 @@ final class SystemAudioModel {
     /// The current toast, if any.
     private(set) var toast: ToastMessage?
 
+    /// Called after a refresh when the default output device changes, with the new device.
+    @ObservationIgnored var onOutputDeviceChange: (@MainActor (AudioDevice?) -> Void)?
+
     @ObservationIgnored private let provider: AudioDeviceProviding
     @ObservationIgnored private let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? "Orpheus",
@@ -93,9 +96,13 @@ final class SystemAudioModel {
 
         announceChanges(in: devices)
 
+        let previousOutputUID = output.selectedDevice?.uid
         output = makeState(for: .output, from: devices)
         input = makeState(for: .input, from: devices)
         soundEffects = makeState(for: .soundEffects, from: devices)
+        if output.selectedDevice?.uid != previousOutputUID {
+            onOutputDeviceChange?(output.selectedDevice)
+        }
     }
 
     /// Assigns a device to a role.

@@ -1,0 +1,4 @@
+module OrpheusAtomics {
+    header "OrpheusAtomics.h"
+    export *
+}

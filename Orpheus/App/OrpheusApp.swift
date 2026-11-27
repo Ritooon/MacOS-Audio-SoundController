@@ -4,35 +4,44 @@ import SwiftUI
 @main
 struct OrpheusApp: App {
     @State private var audio: SystemAudioModel
+    @State private var appAudio: AppAudioModel
     @State private var launchAtLogin = LaunchAtLogin()
 
     init() {
-        // Start right away so the menu-bar symbol reflects the volume before the panel opens.
         let audio = SystemAudioModel(provider: AudioDeviceService())
+        let appAudio = AppAudioModel(
+            processProvider: AudioProcessService(),
+            resolver: SystemRunningAppResolver(),
+            tapFactory: ProcessTapFactory(),
+            settings: SettingsStore()
+        )
+        // Processed apps follow the system output device.
+        audio.onOutputDeviceChange = { [weak appAudio] device in
+            appAudio?.setOutputDevice(uid: device?.uid)
+        }
+        // Start right away so the menu-bar icon reflects the state before the panel opens,
+        // and saved per-app volumes are applied at login.
         audio.start()
+        appAudio.start()
         _audio = State(initialValue: audio)
+        _appAudio = State(initialValue: appAudio)
     }
 
     var body: some Scene {
         MenuBarExtra {
-            MenuContentView(audio: audio, launchAtLogin: launchAtLogin)
+            MenuContentView(audio: audio, appAudio: appAudio, launchAtLogin: launchAtLogin)
         } label: {
-            Image(systemName: menuBarSymbol)
+            Image(nsImage: MenuBarIcon.image(for: menuBarState))
                 .accessibilityLabel("Orpheus")
         }
         .menuBarExtraStyle(.window)
     }
 
-    /// A native template symbol that follows the output volume.
-    private var menuBarSymbol: String {
-        guard let volume = audio.output.volume else { return "speaker.wave.2.fill" }
-        if volume.isMuted == true || volume.level == 0 {
-            return "speaker.slash.fill"
+    /// Pink when the output is muted, yellow when an app is boosted, purple otherwise.
+    private var menuBarState: MenuBarIcon.State {
+        if let volume = audio.output.volume, volume.isMuted == true || volume.level == 0 {
+            return .muted
         }
-        switch volume.level {
-        case ..<0.34: return "speaker.wave.1.fill"
-        case ..<0.67: return "speaker.wave.2.fill"
-        default: return "speaker.wave.3.fill"
-        }
+        return appAudio.hasBoostedApp ? .boosted : .normal
     }
 }
