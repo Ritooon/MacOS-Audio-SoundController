@@ -91,9 +91,11 @@ AppAudioModel (@MainActor @Observable)
 
 ## Menu-bar and app icons
 
-The menu-bar icon is a lyre on a small tile in the theme colours (purple, pink when the
-output is muted, yellow when an app is boosted), rendered by `MenuBarIcon` with
-`ImageRenderer`. `LyreGlyph` and the PNGs in `AppIcon.appiconset` share the same geometry.
+The menu-bar icon is a monochrome lyre at full size with no background, drawn by
+`MenuBarIcon` with a lazy `NSImage` drawing handler: white on a dark menu bar, black on a
+light one (like a template image). It is not a template so its strings can show the state:
+yellow when an app is boosted, pink when the output is muted. `LyreGeometry` and the PNGs in
+`AppIcon.appiconset` share the same geometry.
 
 ## Planned
 
