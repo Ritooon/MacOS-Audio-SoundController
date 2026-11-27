@@ -30,51 +30,67 @@ struct LyreGlyph: View {
     }
 
     private static func frame() -> UnitShape {
-        UnitShape { path in
-            for mirrored in [false, true] {
-                let x: (CGFloat) -> CGFloat = mirrored ? { 1 - $0 } : { $0 }
-                path.move(to: CGPoint(x: x(0.38), y: 0.80))
-                path.addCurve(
-                    to: CGPoint(x: x(0.27), y: 0.17),
-                    control1: CGPoint(x: x(0.12), y: 0.70),
-                    control2: CGPoint(x: x(0.08), y: 0.32)
-                )
-                path.addQuadCurve(to: CGPoint(x: x(0.17), y: 0.08), control: CGPoint(x: x(0.29), y: 0.07))
-            }
-            path.move(to: CGPoint(x: 0.22, y: 0.27))
-            path.addLine(to: CGPoint(x: 0.78, y: 0.27))
-        }
+        UnitShape(kind: .frame)
     }
 
     private static func strings(_ positions: [CGFloat]) -> UnitShape {
-        UnitShape { path in
-            for x in positions {
-                path.move(to: CGPoint(x: x, y: 0.27))
-                path.addLine(to: CGPoint(x: x, y: 0.76))
-            }
-        }
+        UnitShape(kind: .strings(positions))
     }
 
     private static func base() -> UnitShape {
-        UnitShape { path in
-            path.addRoundedRect(
-                in: CGRect(x: 0.27, y: 0.74, width: 0.46, height: 0.13),
-                cornerSize: CGSize(width: 0.045, height: 0.045)
-            )
-        }
+        UnitShape(kind: .base)
     }
 }
 
-/// A shape described in a unit square and scaled to its rect.
+/// A part of the lyre, described in a unit square and scaled to its rect.
 private struct UnitShape: Shape {
-    let build: (inout Path) -> Void
+    enum Kind {
+        case frame
+        case strings([CGFloat])
+        case base
+    }
+
+    let kind: Kind
 
     func path(in rect: CGRect) -> Path {
         var path = Path()
-        build(&path)
+        switch kind {
+        case .frame: Self.addFrame(to: &path)
+        case let .strings(positions): Self.addStrings(positions, to: &path)
+        case .base: Self.addBase(to: &path)
+        }
         let size = min(rect.width, rect.height)
         return path.applying(
             CGAffineTransform(translationX: rect.minX, y: rect.minY).scaledBy(x: size, y: size)
+        )
+    }
+
+    private static func addFrame(to path: inout Path) {
+        for mirrored in [false, true] {
+            let x: (CGFloat) -> CGFloat = mirrored ? { 1 - $0 } : { $0 }
+            path.move(to: CGPoint(x: x(0.38), y: 0.80))
+            path.addCurve(
+                to: CGPoint(x: x(0.27), y: 0.17),
+                control1: CGPoint(x: x(0.12), y: 0.70),
+                control2: CGPoint(x: x(0.08), y: 0.32)
+            )
+            path.addQuadCurve(to: CGPoint(x: x(0.17), y: 0.08), control: CGPoint(x: x(0.29), y: 0.07))
+        }
+        path.move(to: CGPoint(x: 0.22, y: 0.27))
+        path.addLine(to: CGPoint(x: 0.78, y: 0.27))
+    }
+
+    private static func addStrings(_ positions: [CGFloat], to path: inout Path) {
+        for x in positions {
+            path.move(to: CGPoint(x: x, y: 0.27))
+            path.addLine(to: CGPoint(x: x, y: 0.76))
+        }
+    }
+
+    private static func addBase(to path: inout Path) {
+        path.addRoundedRect(
+            in: CGRect(x: 0.27, y: 0.74, width: 0.46, height: 0.13),
+            cornerSize: CGSize(width: 0.045, height: 0.045)
         )
     }
 }
