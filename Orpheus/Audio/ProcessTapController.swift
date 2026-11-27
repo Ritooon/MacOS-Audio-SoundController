@@ -118,11 +118,11 @@ final class ProcessTapController: ProcessTapControlling {
     // MARK: Setup
 
     private func createTap() throws -> String {
-        let description = CATapDescription(stereoMixdownOfProcesses: processObjectIDs.map { NSNumber(value: $0) })
+        let description = CATapDescription(stereoMixdownOfProcesses: processObjectIDs)
         description.uuid = UUID()
         description.name = "Orpheus"
         description.isPrivate = true
-        description.muteBehavior = .mutedWhenTapped
+        description.muteBehavior = CATapMuteBehavior.mutedWhenTapped
 
         var tapID = AudioObjectID(kAudioObjectUnknown)
         let status = AudioHardwareCreateProcessTap(description, &tapID)
