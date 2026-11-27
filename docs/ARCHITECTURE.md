@@ -49,8 +49,52 @@ device.
 `ATSApplicationFontsPath`) and the motion curve, which falls back to a fade with Reduce
 Motion. Views get the theme from the environment (`\.theme`).
 
+## Per-app volume and boost
+
+```text
+AppAudioModel (@MainActor @Observable)
+  ├─ AudioProcessProviding → AudioProcessService (kAudioHardwarePropertyProcessObjectList)
+  ├─ AppGrouping + RunningAppResolving (helpers → owning app)
+  ├─ SettingsStore (volume / mute per bundle ID)
+  └─ ProcessTapMaking → ProcessTapController, one per processed app:
+
+     app processes ──CATapDescription (stereo mixdown, mutedWhenTapped)──▶ Process Tap
+        Process Tap ──▶ private aggregate device (main sub-device = system output)
+        aggregate IOProc ──GainProcessor (gain ramp + soft limiter)──▶ output device
+```
+
+- **Grouping.** Apps often play from helper processes. `AppGrouping` attaches each
+  process to a regular app by walking parent PIDs, then by bundle-ID prefix
+  (`com.google.Chrome.helper` → `com.google.Chrome`), then WebKit → Safari. Processes with no
+  owning app, and Orpheus itself, are hidden.
+- **Only when needed.** An app is tapped only while its volume is not 100 % or it is muted.
+  At 100 % its audio is untouched and the tap is destroyed. The audio-capture consent prompt
+  therefore appears the first time the user changes an app's volume.
+- **Gain.** `GainProcessor.gain(forVolume:)` is quadratic up to 100 % and linear above it, up
+  to `GainProcessor.maxBoost` (300 %). The IOProc ramps from the previous gain to the new one
+  across each buffer and passes every sample through a soft limiter (transparent below 0.9,
+  never reaching ±1).
+- **Real-time safety.** The IOProc block captures only an `AtomicFloat` (target gain,
+  lock-free via the `OrpheusAtomics` C module in `Modules/`), a pointer holding the last
+  ramp gain, and constants. It does not allocate, lock or log.
+- **Buffers.** The aggregate lists the output device's own input streams first, then the
+  tap's mixdown stream, so the IOProc reads the last input buffer. Tap and output formats
+  must be 32-bit float, checked before starting.
+- **Output changes.** `SystemAudioModel.onOutputDeviceChange` tells `AppAudioModel`, which
+  rebuilds every tap on the new device. Taps are also rebuilt when an app's set of processes
+  changes, and released when it quits.
+- **Permission refused.** If a processed app plays but its tap never receives audio for a
+  few seconds, the panel explains how to allow Orpheus in Privacy & Security, or to reset the
+  app to 100 %.
+- Orpheus's aggregate devices use the UID prefix `ProcessTapController.aggregateUIDPrefix`
+  and are filtered out of device lists.
+
+## Menu-bar and app icons
+
+The menu-bar icon is a lyre on a small tile in the theme colours (purple, pink when the
+output is muted, yellow when an app is boosted), rendered by `MenuBarIcon` with
+`ImageRenderer`. `LyreGlyph` and the PNGs in `AppIcon.appiconset` share the same geometry.
+
 ## Planned
 
-- Per-app audio: `AudioProcess`, `ProcessTapController` (Process Tap + private aggregate
-  device + IOProc) and `GainProcessor` (volume, boost, limiter).
-- `SettingsStore` for per-app and per-device preferences.
+- Choosing a different output device per app (the aggregate's main sub-device).
